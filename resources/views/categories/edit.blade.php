@@ -13,11 +13,17 @@
             <input type="hidden" name="_method" value="PUT">
 
             <label>Category name</label><br>
-            <input type="text" name="name" value="{{$category->name}}" class="form-control">
+            <input type="text" name="name" value="{{old('name') ? old('name') : $category->name}}" class="form-control {{$errors->first('name') ? 'is-invalid' : ''}}">
+            <div class="invalid-feedback">
+                {{$errors->first('name')}}
+            </div>
             <br><br>
 
             <label>Category slug</label>
-            <input type="text" name="slug" value="{{$category->slug}}" class="form-control">
+            <input type="text" name="slug" value="{{old('slug') ? old('slug') : $category->slug}}" class="form-control {{$errors->first('slug') ? 'is-invalid' : ''}}">
+            <div class="invalid-feedback">
+                {{$errors->first('slug')}}
+            </div>
             <br><br>
 
             <label>Category image</label><br>
@@ -26,8 +32,11 @@
                 <img src="{{asset('storage/' . $category->image)}}" width="90">
                 <br><br>
             @endif
-            <input type="file" name="image" class="form-control">
+            <input type="file" name="image" class="form-control {{$errors->first('image') ? 'is-invalid' : ''}}">
             <small class="text-muted">Kosongkan jika tidak ingin mengubah gambar</small>
+            <div class="invalid-feedback">
+                {{$errors->first('image')}}
+            </div>
             <br><br>
 
             <input type="submit" value="Update" class="btn btn-primary">

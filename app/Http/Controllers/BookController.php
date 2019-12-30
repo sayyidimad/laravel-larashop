@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Book;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class BookController extends Controller
 {
@@ -15,10 +18,28 @@ class BookController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function index()
+
+    public function __construct()
+    {
+        $this->middleware(function ($request, $next)
+        {
+            if(Gate::allows('manage-books')) return $next($request);
+            abort(403, 'Anda tidak memiliki cukup hak akses');
+        });
+    }
+
+    public function index(Request $request)
     {
         //
-        $books = Book::with('categories')->paginate(10);
+        $status = $request->get('status');
+        $keyword = $request->get('keyword') ? $request->get('keyword') : '';
+
+        if ($status) {
+            $books = Book::with('categories')->where('title', "LIKE", "%$keyword%")->where('status', strtoupper($status))->paginate(10);
+        } else {
+            $books = Book::with('categories')->where("title", "LIKE", "%$keyword%")->paginate(10);
+        }
+        
 
         return view('books.index', ['books' => $books]);
     }
@@ -43,6 +64,16 @@ class BookController extends Controller
     public function store(Request $request)
     {
         //
+        Validator::make($request->all(), [
+            "title" => "required|min:5|max:200",
+            "description" => "required|min:20|max:1000",
+            "author" => "required|min:3|max:100",
+            "publisher" => "required|min:3|max:200",
+            "price" => "required|digits_between:0,10",
+            "stock" => "required|digits_between:0,10",
+            "cover" => "required"
+        ])->validate();
+
         $new_book = new Book;
         $new_book->title = $request->get('title');
         $new_book->description = $request->get('description');
@@ -107,6 +138,19 @@ class BookController extends Controller
         //
         $book = Book::findOrFail($id);
 
+        Validator::make($request->all(), [
+            "title" => "required|min:5|max:200",
+            "slug" => [
+                "required",
+                Rule::unique("books")->ignore($book->slug, "slug")
+            ],
+            "description" => "required|min:20|max:1000",
+            "author" => "required|min:3|max:100",
+            "publisher" => "required|min:3|max:200",
+            "price" => "required|digits_between:0,10",
+            "stock" => "required|digits_between:0,10"
+        ])->validate();
+
         $book->title = $request->get('title');
         $book->slug = $request->get('slug');
         $book->description = $request->get('description');
@@ -142,5 +186,41 @@ class BookController extends Controller
     public function destroy($id)
     {
         //
+        $book = Book::findOrFail($id);
+        $book->delete();
+
+        return redirect()->route('books.index')->with('status', 'Book moved to trash');
+    }
+    
+    public function trash(Request $request)
+    {
+        $keyword = $request->get('keyword') ? $request->get('keyword') : '';
+        $books = Book::onlyTrashed()->where('title', "LIKE", "%$keyword%")->paginate(10);
+
+        return view('books.trash', ['books' => $books]);
+    }
+
+    public function restore($id)
+    {
+        $book = Book::withTrashed()->findOrFail($id);
+        if ($book->trashed()) {
+            $book->restore();
+            return redirect()->route('books.trash')->with('status', 'Book restored successfully');
+        } else {
+            return redirect()->route('books.trash')->with('status', 'Book is not in trash');
+        }        
+    }
+
+    public function deletePermanent($id)
+    {
+        $book = Book::withTrashed()->findOrFail($id);
+        if (!$book->trashed()) {
+            return redirect()->route('books.trash')->with('status', 'Book is not in trash!')->with('status_type', 'alert');
+        } else {
+            $book->categories()->detach();
+            $book->forceDelete();
+
+            return redirect()->route('books.trash')->with('status', 'Book deleted permanently!');
+        }
     }
 }
